@@ -367,10 +367,7 @@
 
                 // 3. Update the UI
                 if (allJobs.length === 0) {
-                    statusMessage.innerHTML = `<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
-                        <p class="font-bold">No Vacancies Found</p>
-                        <p>The spreadsheet loaded successfully, but no active job vacancies were found with future closing dates. **Please check your dates are in DD/MM/YYYY format.**</p>
-                    </div>`;
+                    statusMessage.innerHTML = `<p class="text-xl font-semibold text-custom-teal-dark text-center py-8">No vacancies found.</p>`;
                     jobListContainer.innerHTML = '';
                 } else {
                     statusMessage.innerHTML = ''; // Clear status message on success
@@ -421,3 +418,4 @@
     </script>
 </body>
 </html>
+

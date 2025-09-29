@@ -3,352 +3,448 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Vacancies Dashboard Source</title>
-    <!-- Load Tailwind CSS from CDN -->
+    <title>Job Vacancies Dashboard</title>
+    
+    <!-- 1. Load Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Tailwind Configuration for Custom Colors -->
+    <!-- 2. CORRECT TAILWIND CONFIGURATION BLOCK -->
+    <!-- This script tag defines custom colors using CSS variables before Tailwind initializes its classes. -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
+                        // These definitions reference the CSS variables defined in the <style> block below
                         'custom-teal': {
-                            DEFAULT': '#52BCC2', 
-                            'DEFAULT': '#52BCC2', 
-                            50: '#e6f4f5',      
-                            700: '#2A3C52',     
-                            800: '#2A3C52',     
+                            'DEFAULT': 'var(--color-primary-teal)',
+                            'dark': 'var(--color-dark-heading)',
+                            'light': 'var(--color-light-background)',
                         },
-                    }
-                }
-            }
+                    },
+                },
+            },
         }
     </script>
-
+    
     <style>
+        /* Base styles */
         body {
-            font-family: ui-sans-serif, system-ui, sans-serif; 
-            background-color: #ffffff; 
+            background-color: #ffffff;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            margin: 0;
+            padding: 0;
         }
-        .job-list-container {
-            /* Set max-height for scrolling inside the iframe */
-            max-height: 60vh; 
+
+        /* Set the custom CSS variables for color palette */
+        /* Primary Teal: #52BCC2, Secondary Dark: #2A3C52 */
+        :root {
+            --color-primary-teal: #52BCC2;
+            --color-dark-heading: #2A3C52;
+            --color-light-background: #E8F8F9; /* Very light teal for contrast sections */
+        }
+        
+        /* Ensure smooth scrolling for the internal job list */
+        #job-list {
+            max-height: 60vh; /* Keeps the filter controls visible */
             overflow-y: auto;
-            padding-right: 1rem; 
+            padding-right: 1rem; /* Add padding for scrollbar */
         }
-        .job-list-container::-webkit-scrollbar {
-            width: 8px;
+
+        /* Styling for the application link button to apply the custom teal */
+        .apply-button {
+            /* Note: This class uses the CSS variable directly as a fallback/specific override */
+            background-color: var(--color-primary-teal);
+            color: white;
+            transition: background-color 0.15s ease-in-out;
         }
-        .job-list-container::-webkit-scrollbar-thumb {
-            background-color: #a8a8a8;
-            border-radius: 10px;
+        .apply-button:hover {
+            background-color: #40A4A8; /* Slightly darker hover color */
         }
-        /* Crucial: Ensure the body background is transparent so the iframe looks seamless */
-        body {
-            background-color: transparent;
+
+        /* Styling for the clear search button */
+        #clear-search-button {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none; /* Hidden by default, shown by JS */
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body>
 
-    <div id="job-dashboard" class="max-w-6xl mx-auto bg-white shadow-xl rounded-2xl p-4 md:p-8">
+    <div id="app-container" class="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
 
         <!-- Header -->
-        <h1 class="text-4xl font-extrabold text-custom-teal-800 mb-6 border-b pb-3">Current Job Opportunities</h1>
+        <h1 class="text-4xl font-extrabold text-custom-teal-dark mb-6 border-b-2 border-custom-teal pb-2">
+            Current Vacancies
+        </h1>
 
-        <!-- Filter and Search Controls -->
-        <div class="flex flex-col md:flex-row gap-4 mb-8">
+        <!-- Loading Indicator / Error Message Area -->
+        <div id="status-message" class="mb-6">
+            <div id="loading-spinner" class="flex items-center space-x-2 text-custom-teal-dark">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-custom-teal" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Loading job data from Google Sheet...</span>
+            </div>
+        </div>
 
-            <!-- Filter by School Name -->
-            <div class="w-full md:w-1/3">
-                <label for="schoolFilter" class="block text-sm font-medium text-gray-700 mb-1">Filter by School Name</label>
-                <select id="schoolFilter" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-custom-teal focus:border-custom-teal transition duration-150">
-                    <option value="all">All Schools ({{ count }} available)</option>
-                    <!-- School options populated by JS -->
+        <!-- Filter Controls -->
+        <div class="mb-6 flex flex-col sm:flex-row gap-4">
+            <div class="w-full sm:w-1/3">
+                <label for="school-filter" class="block text-sm font-medium text-gray-700 mb-1">Filter by School:</label>
+                <select id="school-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-custom-teal focus:border-custom-teal sm:text-sm rounded-md shadow-sm">
+                    <option value="">All Schools</option>
                 </select>
             </div>
-
-            <!-- Search by Job Title or Description -->
-            <div class="w-full md:w-2/3">
-                <label for="textSearch" class="block text-sm font-medium text-gray-700 mb-1">Search Job Title or Description</label>
-                <input type="text" id="textSearch" placeholder="e.g., Science, Admin, Primary" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-custom-teal focus:border-custom-teal transition duration-150">
+            <div class="w-full sm:w-2/3">
+                <label for="search-input" class="block text-sm font-medium text-gray-700 mb-1">Search Job Title or Description:</label>
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="e.g., Teacher, Support Staff" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-custom-teal focus:border-custom-teal sm:text-sm rounded-md shadow-sm">
+                    <button id="clear-search-button" class="text-gray-500 hover:text-gray-700 p-1 rounded-full">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
             </div>
         </div>
-
-        <!-- Job Listings Container -->
-        <div id="jobListings" class="space-y-6 job-list-container">
-            <!-- Job cards will be inserted here by JavaScript -->
+        
+        <!-- Job List Container -->
+        <div id="job-list" class="space-y-6">
+            <!-- Jobs will be rendered here by JavaScript -->
         </div>
 
-        <!-- Loading/No Results Message -->
-        <div id="message" class="text-center p-12 text-gray-500 hidden">
-            <p class="text-lg font-semibold">Loading job vacancies...</p>
-        </div>
     </div>
 
-    <!-- JavaScript block moved to the end of the body for faster DOM loading -->
     <script>
-        // --- DATA CONFIGURATION ---
-        const PUBLIC_SHEET_ID = '2PACX-1vRRundEJWgO1-InVfqtSxiqjPv85a5FjKeD-pRrj0y7IyCL0oteqdmLMa_Otkda16R4PZx8QUC_VXKz';
-        const WORKSHEET_GID = '0'; 
-        const GOOGLE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${PUBLIC_SHEET_ID}/pub?gid=${WORKSHEET_GID}&single=true&output=csv`;
+        // --- CONFIGURATION ---
+        // Published CSV Export URL from your Google Sheet (with cache buster for fresh data)
+        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/u/5/d/e/2PACX-1vRRundEJWgO1-InVfqtSxiqjPv85a5FjKeD-pRrj0y7IyCL0oteqdmLMa_Otkda16R4PZx8QUC_VXKz/pub?output=csv&gid=0';
 
-        // --- DATA STORAGE ---
-        let allJobs = [];
+        // Column mapping derived from your job requirements (lowercase, no spaces)
+        // This maps the required script properties to the actual column headers in your sheet (case and spacing ignored)
+        const COLUMN_MAP = {
+            'schoolname': 'school name',
+            'jobtitle': 'job title',
+            'salary': 'salary',
+            'contracthours': 'contract/hours',
+            'startdate': 'start date',
+            'closingdate': 'job application closing date',
+            'jobdescription': 'job description',
+            'jobapplicationlink': 'job application link'
+        };
+        // --- END CONFIGURATION ---
 
-        // --- DOM ELEMENTS ---
-        const jobListingsContainer = document.getElementById('jobListings');
-        const schoolFilter = document.getElementById('schoolFilter');
-        const textSearch = document.getElementById('textSearch');
-        const messageContainer = document.getElementById('message');
+        const statusMessage = document.getElementById('status-message');
+        const jobListContainer = document.getElementById('job-list');
+        const schoolFilter = document.getElementById('school-filter');
+        const searchInput = document.getElementById('search-input');
+        const clearSearchButton = document.getElementById('clear-search-button');
+        
+        let allJobs = []; // Stores all active jobs fetched from the sheet
 
-        // --- HELPER FUNCTIONS ---
+        // Utility to escape HTML for safe insertion
+        const escapeHTML = (str) => {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        };
 
-        function parseUKDate(dateString) {
+        // Utility to parse CSV into an array of objects
+        const parseCSV = (csv) => {
+            const lines = csv.trim().split('\n');
+            if (lines.length === 0) return [];
+            
+            // Extract and clean headers (lowercase, remove non-alphanumeric except space)
+            const rawHeaders = lines[0].split(',');
+            const headers = rawHeaders.map(h => h.trim().toLowerCase());
+            
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                // Simple split by comma. We assume values are not quoted which is typical for Google Sheet CSV exports.
+                const values = lines[i].split(',');
+                if (values.length !== headers.length) continue; 
+
+                const job = {};
+                for (let j = 0; j < headers.length; j++) {
+                    const headerKey = headers[j];
+                    // Find the script's internal key that matches the spreadsheet header
+                    const internalKey = Object.keys(COLUMN_MAP).find(key => 
+                        COLUMN_MAP[key].toLowerCase() === headerKey
+                    );
+                    
+                    if (internalKey) {
+                        job[internalKey] = values[j].trim();
+                    }
+                }
+                // Check if the essential fields are present
+                if (job.jobtitle && job.jobapplicationlink) {
+                    data.push(job);
+                }
+            }
+            return data;
+        };
+
+        // Robust UK Date (DD/MM/YYYY) parser and checker
+        const parseUKDate = (dateString) => {
             if (!dateString) return null;
-            const normalizedDate = dateString.trim().replace(/[-.]/g, '/');
-            const parts = normalizedDate.split('/');
-            if (parts.length !== 3) return null;
+            // Normalize separators and trim
+            const trimmedString = dateString.replace(/[-.]/g, '/').trim();
+            const parts = trimmedString.split('/');
+
+            if (parts.length !== 3) {
+                 if (trimmedString.length > 0) {
+                    console.warn(`[Date Fail: Parts] Expected 3 parts (DD/MM/YYYY) for: "${trimmedString}"`);
+                 }
+                 return null;
+            }
+
+            // Assume UK format: DD, MM, YYYY
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10);
             const year = parseInt(parts[2], 10);
-            if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900) return null;
-            const date = new Date(year, month - 1, day);
-            if (date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year) {
-                date.setHours(0, 0, 0, 0);
-                return date;
-            }
-            return null;
-        }
-
-        function isJobActive(job) {
-            const closingDate = parseUKDate(job.closingdate);
-            if (!closingDate) return false;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            return closingDate >= today;
-        }
-
-        function processCSVData(csvText) {
-            if (!csvText) return [];
-            const rows = csvText.split('\n').filter(line => line.trim() !== '');
-            if (rows.length < 2) return [];
-
-            const headers = rows[0].split(',').map(header => 
-                header.trim().toLowerCase().replace(/\s/g, '').replace(/[\/\\-]/g, '')
-            );
-
-            const keyMap = {
-                'schoolname': 'schoolname', 'school': 'schoolname', 'jobtitle': 'jobtitle', 'title': 'jobtitle',
-                'salary': 'salary', 'pay': 'salary', 'contracthours': 'contracthours', 'hours': 'contracthours', 
-                'startdate': 'startdate', 'dateofstart': 'startdate', 'closingdate': 'closingdate', 
-                'deadline': 'closingdate', 'jobdescription': 'jobdescription', 'description': 'jobdescription',
-                'applicationlink': 'applicationlink', 'link': 'applicationlink',
-            };
-
-            const internalKeys = ['schoolname', 'jobtitle', 'salary', 'contracthours', 'startdate', 'closingdate', 'jobdescription', 'applicationlink'];
-            const headerIndices = {};
-
-            headers.forEach((header, index) => {
-                const internalKey = keyMap[header];
-                if (internalKey && headerIndices[internalKey] === undefined) {
-                    headerIndices[internalKey] = index;
-                }
-            });
-
-            const processedJobs = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const values = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
-                const job = {};
-                let isValid = true;
-
-                for (const internalKey of internalKeys) {
-                    const index = headerIndices[internalKey];
-                    let value = (index !== undefined && values[index]) ? values[index].trim() : '';
-
-                    if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) {
-                        value = value.substring(1, value.length - 1);
-                    }
-
-                    job[internalKey] = value;
-                }
-
-                if (!job.jobtitle || !job.applicationlink) {
-                    isValid = false;
-                }
-
-                if (isValid) {
-                    processedJobs.push(job);
-                }
-            }
-            return processedJobs;
-        }
-
-
-        async function fetchJobsFromSheet(url, retries = 3) {
-            if (!url || url.indexOf('https://') !== 0) return [];
-
-            const cacheBusterUrl = `${url}&t=${new Date().getTime()}`;
-
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(cacheBusterUrl);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const csvText = await response.text();
-                    return processCSVData(csvText); 
-                } catch (error) {
-                    console.error(`Attempt ${i + 1} failed:`, error.message);
-                    if (i < retries - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
-                    } else {
-                        throw new Error("All fetch attempts failed.");
-                    }
-                }
-            }
-            return [];
-        }
-
-        /**
-         * Renders a single job card HTML.
-         * The button text is now "Apply"
-         * @param {Object} job The job data object.
-         */
-        function createJobCard(job) {
-            let closingDisplay = `<span class="text-red-600 font-semibold">Closed / N/A</span>`;
-            const closingDate = parseUKDate(job.closingdate);
-
-            if (closingDate && isJobActive(job)) {
-                closingDisplay = closingDate.toLocaleDateString('en-GB'); 
+            
+            if (isNaN(day) || isNaN(month) || isNaN(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+                console.warn(`[Date Fail: Numbers] Invalid parts (D:${day}, M:${month}, Y:${year}) for: "${trimmedString}"`);
+                return null;
             }
 
+            // JavaScript Date constructor expects YYYY, MM-1, DD
+            // We set the time to the end of the day for accurate closing comparisons (23:59:59)
+            const dateObj = new Date(year, month - 1, day, 23, 59, 59);
+
+            // Check for 'Invalid Date' object that might result from rolling over (e.g. Feb 30)
+            if (isNaN(dateObj.getTime())) {
+                 console.warn(`[Date Fail: Object] Date object creation failed for: "${trimmedString}"`);
+                 return null;
+            }
+
+            return dateObj;
+        };
+
+        const isJobActive = (dateString) => {
+            const closingDate = parseUKDate(dateString);
+            if (!closingDate) {
+                console.log(`Job deemed INACTIVE (Date Parse Failed) for string: "${dateString}"`);
+                return false;
+            }
+
+            const now = new Date();
+            const isActive = closingDate.getTime() >= now.getTime();
+            
+            if (!isActive) {
+                 console.log(`Job deemed INACTIVE (Date Expired) for date: ${closingDate.toLocaleDateString('en-GB')}`);
+            }
+
+            return isActive;
+        };
+
+        const formatClosingDate = (dateString) => {
+            const date = parseUKDate(dateString);
+            if (!date) return 'N/A';
+            
+            // Format back to DD/MM/YYYY for display (en-GB locale)
+            return date.toLocaleDateString('en-GB');
+        };
+
+        const createJobCard = (job) => {
+            const displayDate = formatClosingDate(job.closingdate);
+            const closingStatus = `Closing: ${displayDate}`;
+            
             return `
-                <div class="bg-white p-6 border border-gray-100 rounded-xl shadow-xl hover:shadow-2xl transition duration-300 ease-in-out">
-                    <div class="flex justify-between items-start mb-4 flex-wrap">
-                        <h2 class="text-2xl font-bold text-custom-teal w-full md:w-3/4">${job.jobtitle}</h2>
-                        <span class="text-sm font-semibold text-gray-500 mt-2 md:mt-0">${job.schoolname}</span>
-                    </div>
+                <div class="job-card bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 hover:shadow-xl transition duration-300">
+                    <div class="p-5">
+                        <div class="flex flex-col md:flex-row md:items-start justify-between">
+                            <!-- Job Title and Description -->
+                            <div class="flex-grow mb-4 md:mb-0">
+                                <h2 class="text-2xl font-bold text-custom-teal">${escapeHTML(job.jobtitle)}</h2>
+                                <p class="text-lg font-medium text-custom-teal-dark mb-2">${escapeHTML(job.schoolname)}</p>
+                                <p class="text-gray-600 mt-2 whitespace-pre-line">${escapeHTML(job.jobdescription)}</p>
+                            </div>
 
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600 mb-5 border-y py-3 bg-custom-teal-50 rounded-lg p-3">
-                        <div>
-                            <p class="font-medium text-gray-900">Salary</p>
-                            <p>${job.salary || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="font-medium text-gray-900">Contract</p>
-                            <p>${job.contracthours || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="font-medium text-gray-900">Start Date</p>
-                            <p>${job.startdate || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="font-medium text-gray-900">Closing Date</p>
-                            <p class="closing-date">${closingDisplay}</p>
+                            <!-- Apply Button -->
+                            <div class="md:ml-6 flex-shrink-0">
+                                <a href="${escapeHTML(job.jobapplicationlink)}" target="_blank" class="apply-button inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-full shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-custom-teal transition duration-200">
+                                    Apply
+                                </a>
+                            </div>
                         </div>
                     </div>
 
-                    <p class="text-gray-700 mb-6 line-clamp-3">${job.jobdescription || 'No description provided.'}</p>
-
-                    <!-- Application Link Button - TEXT IS NOW "Apply" -->
-                    <a href="${job.applicationlink}" target="_blank" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-full shadow-lg text-white bg-custom-teal hover:bg-custom-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-custom-teal transition duration-150 transform hover:scale-[1.02]">
-                        Apply
-                        <svg class="ml-3 -mr-1 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                        </svg>
-                    </a>
+                    <!-- Key Details Bar -->
+                    <div class="bg-custom-teal-light px-5 py-3 border-t border-custom-teal-light">
+                        <div class="flex flex-wrap text-sm font-semibold text-custom-teal-dark">
+                            <span class="mr-4 md:mr-6 flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-custom-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 1.343 3 3v2a3 3 0 01-3 3 3 3 0 01-3-3v-2c0-1.657 1.343-3 3-3z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v.01M16 4.414l-1.414 1.414M20 12h.01M19.586 16l-1.414-1.414M12 20v.01M7.414 19.586l-1.414-1.414M4 12h.01M4.414 7.414l1.414 1.414"></path></svg>
+                                ${escapeHTML(job.salary || 'Salary: N/A')}
+                            </span>
+                            <span class="mr-4 md:mr-6 flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-custom-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                ${escapeHTML(job.contracthours || 'Contract: N/A')}
+                            </span>
+                            <span class="mr-4 md:mr-6 flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-custom-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                Start: ${escapeHTML(job.startdate ? formatClosingDate(job.startdate) : 'N/A')}
+                            </span>
+                             <span class="flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-custom-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                ${closingStatus}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             `;
-        }
+        };
 
-        function populateSchoolFilter(jobs) {
-            const schools = new Set(jobs.map(job => job.schoolname).sort());
-            let options = `<option value="all">All Schools (${jobs.length} listed)</option>`;
-            schools.forEach(school => {
-                if (school) options += `<option value="${school}">${school}</option>`;
-            });
-            schoolFilter.innerHTML = options;
-        }
-
-        function filterAndRenderJobs() {
+        const renderJobs = () => {
             const selectedSchool = schoolFilter.value;
-            const searchTerm = textSearch.value.toLowerCase().trim();
+            const searchTerm = searchInput.value.toLowerCase();
+            
+            // 1. Filter by School
+            let filteredJobs = allJobs.filter(job => 
+                !selectedSchool || job.schoolname === selectedSchool
+            );
 
-            let filteredJobs = allJobs.filter(job => {
-                const activeMatch = isJobActive(job); 
-                const schoolMatch = selectedSchool === 'all' || job.schoolname === selectedSchool;
-                const searchFields = [
-                    job.jobtitle, job.jobdescription, job.schoolname, job.salary, job.contracthours
-                ].join(' ').toLowerCase();
-                const textMatch = searchFields.includes(searchTerm);
-                return activeMatch && schoolMatch && textMatch;
-            });
+            // 2. Filter by Search Term
+            if (searchTerm) {
+                filteredJobs = filteredJobs.filter(job => 
+                    job.jobtitle.toLowerCase().includes(searchTerm) ||
+                    job.jobdescription.toLowerCase().includes(searchTerm)
+                );
+                clearSearchButton.style.display = 'block';
+            } else {
+                clearSearchButton.style.display = 'none';
+            }
 
-            jobListingsContainer.innerHTML = '';
+            // 3. Render
+            jobListContainer.innerHTML = filteredJobs.map(createJobCard).join('');
 
             if (filteredJobs.length === 0) {
-                const isFiltered = selectedSchool !== 'all' || searchTerm !== '';
-                jobListingsContainer.innerHTML = `
-                    <div class="text-center p-16 bg-gray-50 rounded-lg shadow-inner">
-                        <p class="text-xl font-semibold text-gray-600">
-                            ${isFiltered ? 'No vacancies found matching your criteria.' : 'No active vacancies found.'}
-                        </p>
-                        <p class="text-md text-gray-500 mt-2">
-                            ${isFiltered 
-                                ? 'Try clearing your filters or search terms.' 
-                                : 'Check your Google Sheet and ensure all jobs have a valid DD/MM/YYYY closing date that is today or in the future.'}
-                        </p>
-                    </div>
+                jobListContainer.innerHTML = `
+                    <p class="text-lg text-gray-500 text-center py-10">
+                        No job vacancies match your current filter and search criteria.
+                    </p>
                 `;
+            }
+        };
+
+        const updateSchoolFilter = () => {
+            // Get unique school names from currently active jobs
+            const uniqueSchools = [...new Set(allJobs.map(job => job.schoolname))].sort();
+
+            // Clear existing options, but keep "All Schools"
+            schoolFilter.innerHTML = '<option value="">All Schools</option>';
+
+            uniqueSchools.forEach(school => {
+                const option = document.createElement('option');
+                option.value = school;
+                option.textContent = school;
+                schoolFilter.appendChild(option);
+            });
+
+            // Re-apply current filtering
+            renderJobs();
+        };
+
+        const sortJobsByClosingDate = (jobs) => {
+            return jobs.sort((a, b) => {
+                const dateA = parseUKDate(a.closingdate);
+                const dateB = parseUKDate(b.closingdate);
+                
+                // If either date is invalid, prioritize valid dates first, then handle as equal
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1; // Put job A later if its date is invalid
+                if (!dateB) return -1; // Put job B later if its date is invalid
+
+                // Sort ascending (soonest closing date first)
+                return dateA.getTime() - dateB.getTime();
+            });
+        };
+
+        const fetchJobsFromSheet = async (attempt = 1) => {
+            const cacheBusterURL = `${GOOGLE_SHEET_URL}&t=${new Date().getTime()}`;
+            const maxRetries = 3;
+
+            // Show loading state only on the first attempt
+            if (attempt === 1) {
+                statusMessage.innerHTML = document.getElementById('loading-spinner').outerHTML;
             } else {
-                filteredJobs.forEach(job => {
-                    jobListingsContainer.innerHTML += createJobCard(job);
-                });
+                statusMessage.innerHTML = ''; // Clear status during retries
             }
-
-            const allSchoolsOption = schoolFilter.querySelector('option[value="all"]');
-            if(allSchoolsOption) {
-                allSchoolsOption.textContent = `All Schools (${allJobs.length} listed)`; 
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            messageContainer.classList.remove('hidden');
-            messageContainer.innerHTML = `<p class="text-lg font-semibold">Loading job vacancies...</p>`; 
-
-            let fetchFailed = false;
 
             try {
-                allJobs = await fetchJobsFromSheet(GOOGLE_SHEET_URL);
+                const response = await fetch(cacheBusterURL);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const csvData = await response.text();
+                let parsedJobs = parseCSV(csvData);
+
+                console.log(`[Data Fetch] Successfully parsed ${parsedJobs.length} total rows from CSV.`);
+                
+                // 1. Filter out inactive (past closing date) jobs immediately
+                const activeJobs = parsedJobs.filter(job => isJobActive(job.closingdate));
+                
+                console.log(`[Data Filter] Found ${activeJobs.length} active jobs after date filtering.`);
+
+                // 2. Sort active jobs (soonest closing first)
+                allJobs = sortJobsByClosingDate(activeJobs);
+
+                // 3. Update the UI
+                if (allJobs.length === 0) {
+                    statusMessage.innerHTML = `<p class="text-xl font-semibold text-custom-teal-dark text-center py-8">No vacancies found.</p>`;
+                    jobListContainer.innerHTML = '';
+                } else {
+                    statusMessage.innerHTML = ''; // Clear status message on success
+                    updateSchoolFilter();
+                    renderJobs(); // Initial render after filtering/sorting
+                }
+
             } catch (error) {
-                fetchFailed = true;
+                console.error(`Attempt ${attempt} failed:`, error);
+                
+                if (attempt < maxRetries) {
+                    // Use exponential backoff for retries
+                    const delay = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchJobsFromSheet(attempt + 1);
+                }
+
+                console.error(`Failed to fetch Google Sheet data after ${maxRetries} retries.`);
+                
+                let errorMessage = `<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+                    <p class="font-bold">Error Loading Data (Code: ${error.message})</p>
+                    <p>The job data could not be retrieved. Please ensure the Google Sheet is:</p>
+                    <ul class="list-disc ml-5 mt-2">
+                        <li>**Published to the web** (File > Share > Publish to web).</li>
+                        <li>**Publicly accessible** (check the share settings).</li>
+                        <li>Using the correct **column headers** (Job Title, Closing Date, etc.) in the first row.</li>
+                    </ul>
+                </div>`;
+                
+                statusMessage.innerHTML = errorMessage;
+                jobListContainer.innerHTML = ''; // Clear job list
             }
+        };
 
-            if (fetchFailed) {
-                 messageContainer.innerHTML = `
-                    <div class="p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-xl max-w-lg mx-auto shadow-md">
-                        <p class="font-bold">Data Load Error: Check Publishing</p>
-                        <p class="text-sm mt-1">Please ensure the Google Sheet is **Published to the web** (File &gt; Share &gt; Publish to web).</p>
-                    </div>
-                `;
-                 document.querySelector('.flex-col.md\\:flex-row.gap-4.mb-8').classList.add('hidden');
-
-            } else if (allJobs.length > 0) {
-                messageContainer.classList.add('hidden');
-
-                populateSchoolFilter(allJobs);
-                filterAndRenderJobs();
-
-                schoolFilter.addEventListener('change', filterAndRenderJobs);
-                textSearch.addEventListener('input', filterAndRenderJobs);
-
-            } else {
-                 messageContainer.innerHTML = `<p class="text-lg font-semibold text-gray-600">No job vacancies found.</p>`;
-                 document.querySelector('.flex-col.md\\:flex-row.gap-4.mb-8').classList.add('hidden');
-            }
+        // --- Event Listeners ---
+        schoolFilter.addEventListener('change', renderJobs);
+        searchInput.addEventListener('input', renderJobs);
+        
+        // Listener for clearing search
+        clearSearchButton.addEventListener('click', () => {
+            searchInput.value = '';
+            renderJobs();
         });
+        
+        // Initialize on window load
+        window.onload = fetchJobsFromSheet;
+
     </script>
 </body>
 </html>
+

@@ -4,44 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Vacancies Dashboard</title>
-    <!-- 
-        Load Tailwind CSS. The script is inside the file to ensure it's self-contained.
-        The external hosting platform may block this, which is why an iframe is recommended. 
-    -->
+    
+    <!-- 1. Load Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. CORRECT TAILWIND CONFIGURATION BLOCK -->
+    <!-- This script tag defines custom colors using CSS variables before Tailwind initializes its classes. -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // These definitions reference the CSS variables defined in the <style> block below
+                        'custom-teal': {
+                            'DEFAULT': 'var(--color-primary-teal)',
+                            'dark': 'var(--color-dark-heading)',
+                            'light': 'var(--color-light-background)',
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+    
     <style>
         /* Base styles */
         body {
-            background-color: #ffffff; /* Explicitly set body background to white */
+            background-color: #ffffff;
             font-family: ui-sans-serif, system-ui, sans-serif;
             margin: 0;
             padding: 0;
         }
 
-        /* Set the custom color palette for Tailwind */
+        /* Set the custom CSS variables for color palette */
         /* Primary Teal: #52BCC2, Secondary Dark: #2A3C52 */
         :root {
             --color-primary-teal: #52BCC2;
             --color-dark-heading: #2A3C52;
             --color-light-background: #E8F8F9; /* Very light teal for contrast sections */
         }
-
-        /* Apply custom colors via Tailwind config */
-        /* We set up the colors here to be used directly as classes */
-        tailwind-config {
-            theme: {
-                extend: {
-                    colors: {
-                        'custom-teal': {
-                            'DEFAULT': 'var(--color-primary-teal)',
-                            'dark': 'var(--color-dark-heading)',
-                            'light': 'var(--color-light-background)',
-                        },
-                    }
-                }
-            }
-        }
-
+        
         /* Ensure smooth scrolling for the internal job list */
         #job-list {
             max-height: 60vh; /* Keeps the filter controls visible */
@@ -51,6 +53,7 @@
 
         /* Styling for the application link button to apply the custom teal */
         .apply-button {
+            /* Note: This class uses the CSS variable directly as a fallback/specific override */
             background-color: var(--color-primary-teal);
             color: white;
             transition: background-color 0.15s ease-in-out;
@@ -418,4 +421,3 @@
     </script>
 </body>
 </html>
-

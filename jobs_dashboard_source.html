@@ -154,7 +154,12 @@
         // Utility to parse CSV into an array of objects
         const parseCSV = (csv) => {
             const lines = csv.trim().split('\n');
-            if (lines.length === 0) return [];
+            
+            // --- DIAGNOSTIC LOG: Total lines found ---
+            console.log(`[Line Count] CSV contains ${lines.length} total lines (including 1 header row).`);
+            // --------------------------
+
+            if (lines.length <= 1) return []; // If only header or no lines, return empty array
             
             // Regex to split by comma, but IGNORE commas inside double quotes.
             // This is crucial for job descriptions that contain commas.
@@ -164,11 +169,23 @@
             const rawHeaders = lines[0].split(csvSplitRegex);
             const headers = rawHeaders.map(h => h.trim().toLowerCase());
             
-            const data = [];
+            // --- DEBUGGING LOG: Show the headers read from the sheet ---
+            console.log(`[CSV Headers] Parsed Headers: ${headers.join(' | ')}`);
+            // -----------------------------------------------------------------
 
+            const data = [];
+            
+            // --- Prepare for new diagnostic indexes ---
+            const targetTitle = COLUMN_MAP.jobtitle.toLowerCase().replace(/\s/g, ''); // e.g., 'jobtitle'
+            const targetLink = COLUMN_MAP.jobapplicationlink.toLowerCase().replace(/\s/g, ''); // e.g., 'jobapplicationlink'
+            let titleIndex = -1;
+            let linkIndex = -1;
+            // ------------------------------------------
+
+            // Start loop from the second line (index 1) to skip the header
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
-                if (line.length === 0) continue;
+                if (line.length === 0) continue; // Skip truly blank rows
 
                 // Use the robust split function
                 const values = line.split(csvSplitRegex).map(val => {
@@ -187,20 +204,55 @@
                 }
 
                 const job = {};
+                let jobTitleFound = false;
+                let jobLinkFound = false;
+
                 for (let j = 0; j < headers.length; j++) {
-                    const headerKey = headers[j];
-                    // Find the script's internal key that matches the spreadsheet header
-                    const internalKey = Object.keys(COLUMN_MAP).find(key => 
-                        COLUMN_MAP[key].toLowerCase() === headerKey
-                    );
+                    const headerKey = headers[j]; // Header from the sheet (trimmed, lowercased, spaces preserved)
+                    
+                    // --- ROBUST MATCHING LOGIC ---
+                    // Clean both the actual header and the target map value by removing ALL spaces
+                    const cleanSheetHeader = headerKey.replace(/\s/g, '');
+                    
+                    const internalKey = Object.keys(COLUMN_MAP).find(key => {
+                        const cleanTargetHeader = COLUMN_MAP[key].toLowerCase().replace(/\s/g, '');
+                        // Check if the cleaned sheet header matches the cleaned target map value
+                        return cleanTargetHeader === cleanSheetHeader;
+                    });
+                    // -----------------------------
                     
                     if (internalKey) {
                         job[internalKey] = values[j].trim();
+                        
+                        // Capture the indexes based on the map keys for the diagnostic log
+                        if (internalKey === 'jobtitle') titleIndex = j;
+                        if (internalKey === 'jobapplicationlink') linkIndex = j;
+                        
+                        // Check if the value is non-empty after trimming
+                        if (internalKey === 'jobtitle' && job[internalKey]) jobTitleFound = true;
+                        if (internalKey === 'jobapplicationlink' && job[internalKey]) jobLinkFound = true;
                     }
                 }
+                
+                // --- MODIFIED DIAGNOSTIC LOG ---
+                if (i === 1) {
+                    console.log(`[Diagnostic Indices] Job Title Index: ${titleIndex} | Link Index: ${linkIndex}`);
+                    console.log(`[First Data Row Values] The parser extracted ${values.length} values for the first row:`, values);
+                    if (titleIndex > -1 && linkIndex > -1) {
+                        console.log(`Title Value (Index ${titleIndex}): "${values[titleIndex]}"`);
+                        console.log(`Link Value (Index ${linkIndex}): "${values[linkIndex]}"`);
+                    }
+                }
+                // ---------------------------------
+
                 // Check if the essential fields are present
-                if (job.jobtitle && job.jobapplicationlink) {
+                if (jobTitleFound && jobLinkFound) {
                     data.push(job);
+                } else {
+                     // --- ENHANCED DEBUGGING LOG ---
+                     // Note: We include the raw line for debugging the separator issue
+                     console.warn(`[Missing Data] Row ${i + 1} skipped. Job Title: "${job.jobtitle || 'EMPTY'}" | Link: "${job.jobapplicationlink || 'EMPTY'}" (Must be present). Raw line length: ${line.length}`);
+                     // -----------------------------
                 }
             }
             return data;
@@ -401,6 +453,13 @@
                 }
                 
                 const csvData = await response.text();
+                
+                // --- DEBUGGING LOG: Show the raw data sample ---
+                console.log('--- RAW CSV Data Sample (First 500 chars) ---');
+                console.log(csvData.substring(0, 500) + (csvData.length > 500 ? '...' : ''));
+                console.log('-------------------------------------------');
+                // --- END DEBUGGING LOG ---
+
                 let parsedJobs = parseCSV(csvData);
 
                 console.log(`[Data Fetch] Successfully parsed ${parsedJobs.length} total rows from CSV.`);

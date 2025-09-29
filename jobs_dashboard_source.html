@@ -107,6 +107,17 @@
                 </div>
             </div>
         </div>
+        
+        <!-- NEW Refresh Data Button and Info -->
+        <div class="mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-b pb-4 border-gray-200">
+            <p class="text-sm text-gray-500">
+                Data is pulled directly from the published Google Sheet on page load. Use 'Refresh Data' to check for recent sheet changes (e.g., updated closing dates).
+            </p>
+            <button id="refresh-data-button" class="flex-shrink-0 flex items-center justify-center px-4 py-2 border border-custom-teal text-base font-medium rounded-full shadow-sm text-custom-teal-dark bg-white hover:bg-custom-teal-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-custom-teal transition duration-150" disabled>
+                <svg id="refresh-icon" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.836 7.727l-1.414 1.414M16 16v5h.582m-15.836-7.727l-1.414 1.414M12 21h-2a9 9 0 01-9-9V3"></path></svg>
+                <span id="refresh-text">Refresh Data</span>
+            </button>
+        </div>
 
         <!-- Job List Container -->
         <div id="job-list" class="space-y-6">
@@ -139,6 +150,12 @@
         const schoolFilter = document.getElementById('school-filter');
         const searchInput = document.getElementById('search-input');
         const clearSearchButton = document.getElementById('clear-search-button');
+        
+        // New elements for refresh functionality
+        const refreshDataButton = document.getElementById('refresh-data-button');
+        const refreshIcon = document.getElementById('refresh-icon');
+        const refreshText = document.getElementById('refresh-text');
+
 
         let allJobs = []; // Stores all active jobs fetched from the sheet
 
@@ -344,10 +361,22 @@
             const cacheBusterURL = `${GOOGLE_SHEET_URL}&t=${new Date().getTime()}`;
             const maxRetries = 3;
 
-            try {
-                // Ensure loading spinner is visible before fetch
+            // Handle initial load visibility if the button is not yet ready (only happens on first load)
+            const isInitialLoad = attempt === 1 && allJobs.length === 0;
+
+            if (isInitialLoad) {
+                // Show initial loading spinner
                 statusMessage.innerHTML = document.getElementById('loading-spinner').outerHTML;
-                
+            } else if (refreshDataButton) {
+                // Show manual refresh spinner and disable button
+                refreshDataButton.disabled = true;
+                refreshIcon.classList.add('animate-spin');
+                refreshText.textContent = 'Refreshing...';
+                statusMessage.innerHTML = ''; // Clear previous errors/messages during refresh
+            }
+
+
+            try {
                 const response = await fetch(cacheBusterURL);
                 
                 if (!response.ok) {
@@ -400,16 +429,32 @@
                 
                 statusMessage.innerHTML = errorMessage;
                 jobListContainer.innerHTML = ''; // Clear job list
+            } finally {
+                 // Reset button state (always run, even after failure)
+                if (refreshDataButton) {
+                    refreshDataButton.disabled = false;
+                    refreshIcon.classList.remove('animate-spin');
+                    refreshText.textContent = 'Refresh Data';
+                }
             }
         };
 
         // --- Event Listeners ---
         schoolFilter.addEventListener('change', renderJobs);
         searchInput.addEventListener('input', renderJobs);
+        
+        // Listener for clearing search
         clearSearchButton.addEventListener('click', () => {
             searchInput.value = '';
             renderJobs();
         });
+        
+        // Listener for the new Refresh button
+        if (refreshDataButton) {
+            refreshDataButton.addEventListener('click', () => {
+                fetchJobsFromSheet();
+            });
+        }
 
         // Initialize on window load
         window.onload = fetchJobsFromSheet;

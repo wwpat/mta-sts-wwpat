@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Openings</title>
+    <title>Job Vacancies</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Set up custom configuration for the "Inter" font and new colors -->
@@ -57,7 +57,7 @@
 
     <div id="job-listings-container">
         <!-- Updated Heading Color to primary-dark -->
-        <h1 class="text-3xl md:text-4xl font-extrabold text-primary-dark mb-6 text-center">Current Openings</h1>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-primary-dark mb-6 text-center">Job Vacancies</h1>
         
         <!-- Loading State -->
         <div id="loading" class="flex flex-col items-center justify-center p-10">
@@ -89,12 +89,14 @@
     </div>
 
     <script>
-        // Constants for the job board logic
+        // CRITICAL UPDATE: Using the long, obfuscated ID from the "Publish to Web" link.
+        // This ID is needed when using the /e/ prefix in the G-Viz URL.
         const SHEET_DOC_ID = '2PACX-1vRRundEJWgO1-InVfqtSxiqjPv85a5FjKeD-pRrj0y7IyCL0oteqdmLMa_Otkda16R4PZx8QUC_VXKz';
-        const SHEET_GID = '0'; // The 'gid' parameter
+        const SHEET_GID = '0'; // The 'gid' parameter (0 is usually the first tab)
         
-        // Google Visualization API URL to fetch the spreadsheet data as JSON
-        const GVIZ_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+        // CRITICAL UPDATE: The URL now includes the '/e/' prefix, which is necessary
+        // when using the long obfuscated ID from the "Publish to web" feature.
+        const GVIZ_URL = \`https://docs.google.com/spreadsheets/d/e/\${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=\${SHEET_GID}\`;
 
         // DOM Elements
         const jobsList = document.getElementById('jobs-list');
@@ -102,6 +104,29 @@
         const errorMessage = document.getElementById('error-message');
         const errorText = document.getElementById('error-text');
         const emptyMessage = document.getElementById('empty-message');
+        
+        /**
+         * Formats a raw date value into the UK standard (DD/MM/YYYY).
+         * @param {string|number|null} rawDateValue - The date value from the G-Viz API.
+         * @returns {string} The formatted date string or 'N/A'.
+         */
+        function formatUkDate(rawDateValue) {
+            if (!rawDateValue) return 'N/A';
+            
+            // The G-Viz API often returns date strings in a format like 'Date(YYYY, M, D, H, M, S)'
+            // or an object/timestamp. We try to create a Date object.
+            const date = parseRawDate(rawDateValue);
+
+            // If the date is valid, format it using en-GB locale
+            if (date && !isNaN(date.getTime())) {
+                return new Intl.DateTimeFormat('en-GB', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).format(date);
+            }
+            return 'N/A';
+        }
 
         /**
          * Parses the raw response from the Google Visualization API.
@@ -111,7 +136,7 @@
          */
         function parseGvizResponse(responseText) {
             try {
-                // Find the JSON object part by stripping the gviz wrapper (e.g., '/*O_o*/\nggoogle.visualization.Query.setResponse(' and ending '});')
+                // Find the JSON object part by stripping the gviz wrapper
                 const start = responseText.indexOf('{');
                 const end = responseText.lastIndexOf('}');
                 
@@ -128,23 +153,70 @@
                 return null;
             }
         }
+        
+        /**
+         * Reliably parses raw G-Viz date values into a standardized Date object.
+         * @param {string|number|null} rawDateValue - The date value from the G-Viz API.
+         * @returns {Date|null} A Date object standardized to midnight, or null if invalid.
+         */
+        function parseRawDate(rawDateValue) {
+            if (!rawDateValue) return null;
+            let date = null;
+
+            if (typeof rawDateValue === 'string' && rawDateValue.startsWith('Date(')) {
+                // Handle the special Google Visualization API date format: Date(YYYY, M, D, ...)
+                // NOTE: The month (M) is 0-indexed in this format (Jan=0, Sep=8)!
+                const match = rawDateValue.match(/Date\((\d+),(\d+),(\d+)/);
+                if (match) {
+                    // New Date(Year, Month, Day) - using the 0-indexed month from the match
+                    date = new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+                }
+            } else {
+                // Handle ISO strings, timestamps, or simple date strings (e.g., cell.f)
+                date = new Date(rawDateValue);
+            }
+
+            if (date && !isNaN(date.getTime())) {
+                // Standardize time to midnight for comparison (only interested in the date)
+                date.setHours(0, 0, 0, 0);
+                return date;
+            }
+            return null;
+        }
 
         /**
          * Renders a single job card.
-         * @param {object} job - The job object with title, location, description, and link.
+         * @param {object} job - The job object with title, location, description, link, closingDate, and startDate.
          * @returns {string} The HTML string for the job card.
          */
         function renderJobCard(job) {
             return `
                 <div class="bg-white p-6 shadow-xl hover:shadow-2xl transition duration-300 ease-in-out transform hover:-translate-y-1 rounded-xl flex flex-col">
-                    <!-- Updated Job Title Color to primary-dark -->
-                    <h2 class="text-xl font-bold text-primary-dark mb-2">${job.title}</h2>
-                    <p class="text-sm font-semibold text-gray-500 mb-3 flex items-center">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <!-- Job Title -->
+                    <h2 class="text-xl font-bold text-primary-dark mb-1">${job.title}</h2>
+                    
+                    <!-- Location -->
+                    <p class="text-sm font-semibold text-gray-500 mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-primary-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                         ${job.location}
                     </p>
-                    <p class="text-gray-600 mb-4 flex-grow">${job.description || 'No description provided.'}</p>
-                    <!-- Updated Button Colors to primary-accent and primary-dark -->
+
+                    <!-- Start and Closing Dates -->
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-gray-400 mb-4">
+                        <span class="flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Starts: ${job.startDate}
+                        </span>
+                        <span class="flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Closes: ${job.closingDate}
+                        </span>
+                    </div>
+                    
+                    <!-- Description -->
+                    <p class="text-gray-600 mb-4 flex-grow text-sm">${job.description || 'No description provided.'}</p>
+                    
+                    <!-- Apply Button -->
                     <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="mt-auto inline-block text-center bg-primary-accent hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
                         Apply Now
                     </a>
@@ -164,7 +236,7 @@
             try {
                 const response = await fetch(GVIZ_URL);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(\`HTTP error! status: \${response.status}\`);
                 }
                 const rawText = await response.text();
                 const data = parseGvizResponse(rawText);
@@ -174,23 +246,62 @@
                 }
 
                 const jobs = [];
-                // The first row often contains headers, so we skip it (row[0])
-                // We start iterating from the second row (index 1) if the sheet has headers.
-                // Assuming data.table.rows[0] is the header row.
+                // Standardize today's date to midnight for accurate comparison
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                // Skip the first row (index 0), assuming it contains headers
                 const jobRows = data.table.rows.slice(1);
 
-                jobRows.forEach(row => {
+                jobRows.forEach((row, index) => {
                     const c = row.c; // 'c' is the array of cells/columns for the row
                     
-                    // We check if the cell exists and has a value 'v' (value)
-                    const title = c[0] && c[0].v ? c[0].v : 'Untitled Job'; // Column A
-                    const location = c[1] && c[1].v ? c[1].v : 'Remote/TBD'; // Column B
-                    const description = c[2] && c[2].v ? c[2].v : ''; // Column C
-                    const link = c[3] && c[3].v ? c[3].v : '#'; // Column D
+                    // --- COLUMN MAPPING ---
+                    // Note: index + 2 is the actual row number in the spreadsheet (1 for header + 1 for current index)
+                    const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A: schoolname
+                    const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B: jobtitle
+                    const description = c[6] && c[6].v ? c[6].v : '';             // Column G: jobdescription
+                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H: jobapplicationlink
+                    
+                    // Date Fields
+                    const rawStartDateValue = c[4] && (c[4].f || c[4].v);
+                    const startDate = formatUkDate(rawStartDateValue);             // Column E: startdate
+                    const rawClosingDateValue = c[5] && (c[5].f || c[5].v);
+                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F: closingdate
 
-                    // Only include jobs that have at least a title and a valid apply link (not just '#')
-                    if (title !== 'Untitled Job' && link !== '#') {
-                        jobs.push({ title, location, description, link });
+                    // --- VALIDATION AND EXPIRY FILTERING LOGIC ---
+                    
+                    // 1. Check for mandatory fields
+                    const hasValidTitle = title !== 'Untitled Job';
+                    const hasValidLink = link !== '#';
+                    
+                    // 2. Check Expiry
+                    let isClosingDateValid = false;
+                    const closingDateObjectForComparison = parseRawDate(rawClosingDateValue);
+
+                    if (closingDateObjectForComparison) {
+                        // Job is valid if its closing date is today (>= today) or in the future
+                        if (closingDateObjectForComparison.getTime() >= today.getTime()) {
+                            isClosingDateValid = true;
+                        }
+                    }
+
+                    // --- DIAGNOSTIC LOGGING ---
+                    if (!hasValidTitle || !hasValidLink || !isClosingDateValid) {
+                        console.warn(
+                            \`Job filtered out (Row \${index + 2}): \` +
+                            \`Title: \${title} (Valid: \${hasValidTitle}), \` +
+                            \`Link: \${link} (Valid: \${hasValidLink}), \` +
+                            \`Closing Date: \${closingDate} (Expired: \${!isClosingDateValid})\`
+                        );
+                    } else {
+                        console.log(\`Job included (Row \${index + 2}): \${title}\`);
+                    }
+
+
+                    // 3. Final inclusion check
+                    if (hasValidTitle && hasValidLink && isClosingDateValid) {
+                        jobs.push({ title, location, description, link, closingDate, startDate });
                     }
                 });
 
@@ -204,10 +315,13 @@
                 }
 
             } catch (error) {
-                console.error("Failed to fetch jobs:", error);
+                console.error('Failed to fetch jobs:', error);
                 loadingSpinner.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
-                errorText.textContent = `Could not load job data. Details: ${error.message}`;
+                
+                let troubleshootingMessage = \`Could not load job data. Details: \${error.message}. Please ensure the Sheet ID (\${SHEET_DOC_ID}) and GID (\${SHEET_GID}) are correct, and that the sheet is published to the web.\`;
+
+                errorText.textContent = troubleshootingMessage;
             }
         }
 
@@ -216,3 +330,4 @@
     </script>
 </body>
 </html>
+

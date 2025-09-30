@@ -40,8 +40,8 @@
         }
         /* Custom spinner style - using the new accent color */
         .loader {
-            border-top-color: #52BCC2; 
-            border-left-color: #52BCC2;
+            border-top-color: '#52BCC2'; 
+            border-left-color: '#52BCC2';
             border-right-color: transparent;
             border-bottom-color: transparent;
             animation: spin 1s linear infinite;
@@ -71,8 +71,8 @@
             <span class="block sm:inline" id="error-text">Could not load job data. Please check the spreadsheet URL or column configuration.</span>
         </div>
 
-        <!-- Job Cards will be injected here -->
-        <div id="jobs-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Job Cards will be injected here. Changed lg:grid-cols-3 to lg:grid-cols-2 for wider cards. -->
+        <div id="jobs-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             <!-- Dynamic content goes here -->
         </div>
 
@@ -178,14 +178,23 @@
                 // Handle G-Viz date format: Date(YYYY, M, D, ...) where M is 0-indexed
                 const match = rawDateValue.match(/Date\((\d+),(\d+),(\d+)/);
                 if (match) {
+                    // M is 0-indexed (9 = October). We use it directly.
                     date = new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
                 }
             } else {
-                date = new Date(rawDateValue);
+                // If the value is a formatted string like "01/10/2025"
+                // Parse it manually to avoid US vs UK format ambiguity (M/D/Y vs D/M/Y)
+                const parts = String(rawDateValue).split('/');
+                if (parts.length === 3) {
+                    // parts[0]=Day, parts[1]=Month (1-indexed), parts[2]=Year
+                    date = new Date(parts[2], parts[1] - 1, parts[0]); // Subtract 1 for 0-indexed month
+                } else {
+                    date = new Date(rawDateValue);
+                }
             }
 
             if (date && !isNaN(date.getTime())) {
-                date.setHours(0, 0, 0, 0); // Standardize time to midnight
+                date.setHours(0, 0, 0, 0); // Standardize time to midnight for comparison
                 return date;
             }
             return null;
@@ -218,9 +227,21 @@
                         </span>
                     </div>
                     
-                    <!-- Description -->
-                    <p class="text-gray-600 mb-4 flex-grow text-sm">${job.description || 'No description provided.'}</p>
-                    
+                    <!-- Description Dropdown (using native details/summary) -->
+                    <div class="mb-4 flex-grow">
+                        <details class="group border-t pt-2 mt-2 border-gray-100">
+                            <summary class="flex justify-between items-center cursor-pointer text-sm font-semibold text-primary-dark hover:text-primary-accent transition duration-150 ease-in-out list-none">
+                                <span>View Job Description</span>
+                                <!-- Icon to indicate open/close state -->
+                                <svg class="w-4 h-4 transform group-open:rotate-180 transition-transform duration-200 text-primary-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </summary>
+                            <!-- Added 'whitespace-pre-wrap' class to preserve line breaks from the spreadsheet -->
+                            <div class="mt-2 text-gray-600 text-sm whitespace-pre-wrap">
+                                ${job.description || 'No description provided.'}
+                            </div>
+                        </details>
+                    </div>
+
                     <!-- Apply Button -->
                     <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="mt-auto inline-block text-center bg-primary-accent hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
                         Apply Now
@@ -243,17 +264,21 @@
                 const rawText = await response.text();
                 const data = parseGvizResponse(rawText);
 
-                if (!data || !data.table || !data.table.rows) {
+                if (!data || !data.table) {
                     throw new Error("Invalid or empty data format received from Google Sheet.");
                 }
 
-                const totalRows = data.table.rows.length;
-                console.log(`Received total rows (including header): ${totalRows}`);
-
-
-                // Get all rows, excluding the header (index 0)
-                const jobRows = data.table.rows.slice(1);
-                console.log(`Job rows remaining after slicing off header: ${jobRows.length}`);
+                // --- FINAL RAW DATA OBJECT RECEIVED ---
+                console.log('--- FINAL RAW DATA OBJECT RECEIVED ---');
+                console.log(data);
+                
+                if (!data.table.rows) {
+                    console.log('Data object has table but no "rows" property, or "rows" is null/undefined.');
+                    throw new Error("No data rows found in the sheet response.");
+                }
+                
+                const jobRows = data.table.rows; 
+                console.log(`Job rows to process: ${jobRows.length}`);
                 
                 const jobs = [];
                 // Get today's date standardized to midnight for accurate comparison
@@ -275,13 +300,16 @@
                     const description = c[6] && c[6].v ? c[6].v : '';             // Column G
                     const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H
 
-                    // --- VALIDATION AND EXPIRY FILTERING LOGIC (RE-ENABLED) ---
+                    // --- VALIDATION AND EXPIRY FILTERING LOGIC ---
                     
                     const hasValidTitle = title !== 'Untitled Job';
                     const hasValidLink = link !== '#';
                     
                     let isClosingDateValid = false; 
                     const closingDateObjectForComparison = parseRawDate(rawClosingDateValue);
+
+                    // --- NEW DIAGNOSTIC LOG: Log the comparison dates as milliseconds ---
+                    console.log(`Today MS: ${today.getTime()} (${today.toDateString()}) | Closing MS: ${closingDateObjectForComparison ? closingDateObjectForComparison.getTime() : 'N/A'}`);
                     
                     if (closingDateObjectForComparison) {
                         // Job is valid if its closing date is today (>= today) or in the future
@@ -325,4 +353,3 @@
     </script>
 </body>
 </html>
-

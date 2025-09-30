@@ -89,14 +89,12 @@
     </div>
 
     <script>
-        // CRITICAL UPDATE: Using the long, obfuscated ID from the "Publish to Web" link.
-        // This ID is needed when using the /e/ prefix in the G-Viz URL.
-        const SHEET_DOC_ID = '2PACX-1vRRundEJWgO1-InVfqtSxiqjPv85a5FjKeD-pRrj0y7IyCL0oteqdmLMa_Otkda16R4PZx8QUC_VXKz';
+        // CRITICAL UPDATE: Switched to the original, canonical document ID for more reliable G-Viz access.
+        const SHEET_DOC_ID = '13OnaZQwyzu7lTTCgI02XVr4Uo_0c_GdQ1o8h4Q4GVrc';
         const SHEET_GID = '0'; // The 'gid' parameter (0 is usually the first tab)
         
-        // CRITICAL UPDATE: The URL now includes the '/e/' prefix, which is necessary
-        // when using the long obfuscated ID from the "Publish to web" feature.
-        const GVIZ_URL = \`https://docs.google.com/spreadsheets/d/e/\${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=\${SHEET_GID}\`;
+        // CRITICAL UPDATE: The URL structure is now the standard, non-'/e/' format for the canonical ID.
+        const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
         // DOM Elements
         const jobsList = document.getElementById('jobs-list');
@@ -104,6 +102,42 @@
         const errorMessage = document.getElementById('error-message');
         const errorText = document.getElementById('error-text');
         const emptyMessage = document.getElementById('empty-message');
+        
+        /**
+         * Retries the fetch request with exponential backoff.
+         * This helps mitigate temporary network issues or throttling.
+         * @param {string} url - The URL to fetch.
+         * @param {number} maxRetries - Maximum number of retries.
+         * @returns {Promise<Response>} The successful response object.
+         */
+        async function retryFetch(url, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        return response;
+                    }
+                    
+                    // If response is not OK (e.g., 404, 500), but not the last attempt, retry
+                    if (i < maxRetries - 1) {
+                        console.warn(`Fetch attempt ${i + 1} failed with status ${response.status}. Retrying...`);
+                        // Exponential backoff: 1s, 2s, 4s...
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (2 ** i)));
+                    } else {
+                        // Last attempt failed, throw the final error
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error);
+                    if (i < maxRetries - 1) {
+                         // Non-HTTP errors (like network/CORS)
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (2 ** i)));
+                    } else {
+                        throw error; // Re-throw the final error
+                    }
+                }
+            }
+        }
         
         /**
          * Formats a raw date value into the UK standard (DD/MM/YYYY).
@@ -114,7 +148,6 @@
             if (!rawDateValue) return 'N/A';
             
             // The G-Viz API often returns date strings in a format like 'Date(YYYY, M, D, H, M, S)'
-            // or an object/timestamp. We try to create a Date object.
             const date = parseRawDate(rawDateValue);
 
             // If the date is valid, format it using en-GB locale
@@ -234,10 +267,9 @@
             emptyMessage.classList.add('hidden');
 
             try {
-                const response = await fetch(GVIZ_URL);
-                if (!response.ok) {
-                    throw new Error(\`HTTP error! status: \${response.status}\`);
-                }
+                // Use the resilient fetch function
+                const response = await retryFetch(GVIZ_URL, 3);
+                
                 const rawText = await response.text();
                 const data = parseGvizResponse(rawText);
 
@@ -289,13 +321,13 @@
                     // --- DIAGNOSTIC LOGGING ---
                     if (!hasValidTitle || !hasValidLink || !isClosingDateValid) {
                         console.warn(
-                            \`Job filtered out (Row \${index + 2}): \` +
-                            \`Title: \${title} (Valid: \${hasValidTitle}), \` +
-                            \`Link: \${link} (Valid: \${hasValidLink}), \` +
-                            \`Closing Date: \${closingDate} (Expired: \${!isClosingDateValid})\`
+                            `Job filtered out (Row ${index + 2}): ` +
+                            `Title: ${title} (Valid: ${hasValidTitle}), ` +
+                            `Link: ${link} (Valid: ${hasValidLink}), ` +
+                            `Closing Date: ${closingDate} (Expired: ${!isClosingDateValid})`
                         );
                     } else {
-                        console.log(\`Job included (Row \${index + 2}): \${title}\`);
+                        console.log(`Job included (Row ${index + 2}): ${title}`);
                     }
 
 
@@ -319,7 +351,7 @@
                 loadingSpinner.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
                 
-                let troubleshootingMessage = \`Could not load job data. Details: \${error.message}. Please ensure the Sheet ID (\${SHEET_DOC_ID}) and GID (\${SHEET_GID}) are correct, and that the sheet is published to the web.\`;
+                let troubleshootingMessage = `Failed to connect to the Google Sheet. The most likely cause is that the sheet's sharing settings are too restrictive. Please ensure your Google Sheet has sharing permissions set to "Anyone with the link can view." Details: ${error.message}`;
 
                 errorText.textContent = troubleshootingMessage;
             }
@@ -330,4 +362,3 @@
     </script>
 </body>
 </html>
-

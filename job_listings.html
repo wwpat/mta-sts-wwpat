@@ -93,8 +93,11 @@
         const SHEET_DOC_ID = '13OnaZQwyzu7lTTCgI02XVr4Uo_0c_GdQ1o8h4Q4GVrc';
         const SHEET_GID = '0'; // The 'gid' parameter (0 is usually the first tab)
         
-        // CRITICAL UPDATE: The URL structure is now the standard, non-'/e/' format for the canonical ID.
-        const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+        // CRITICAL UPDATE: Using explicit G-Viz query to select ALL data columns (A-H) for reliability.
+        const GVIZ_QUERY = 'select%20A%2C%20B%2C%20C%2C%20D%2C%20E%2C%20F%2C%20G%2C%20H'; // URL-encoded: select A, B, C, D, E, F, G, H
+        
+        // FIX: Added 'headers=1' to the tqx parameter to explicitly tell the API how many header rows there are, which helps data range detection.
+        const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_DOC_ID}/gviz/tq?tqx=out:json;headers=1&gid=${SHEET_GID}&tq=${GVIZ_QUERY}`;
 
         // DOM Elements
         const jobsList = document.getElementById('jobs-list');
@@ -105,10 +108,6 @@
         
         /**
          * Retries the fetch request with exponential backoff.
-         * This helps mitigate temporary network issues or throttling.
-         * @param {string} url - The URL to fetch.
-         * @param {number} maxRetries - Maximum number of retries.
-         * @returns {Promise<Response>} The successful response object.
          */
         async function retryFetch(url, maxRetries = 3) {
             for (let i = 0; i < maxRetries; i++) {
@@ -117,23 +116,16 @@
                     if (response.ok) {
                         return response;
                     }
-                    
-                    // If response is not OK (e.g., 404, 500), but not the last attempt, retry
                     if (i < maxRetries - 1) {
-                        console.warn(`Fetch attempt ${i + 1} failed with status ${response.status}. Retrying...`);
-                        // Exponential backoff: 1s, 2s, 4s...
                         await new Promise(resolve => setTimeout(resolve, 1000 * (2 ** i)));
                     } else {
-                        // Last attempt failed, throw the final error
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                 } catch (error) {
-                    console.error(`Attempt ${i + 1} failed:`, error);
                     if (i < maxRetries - 1) {
-                         // Non-HTTP errors (like network/CORS)
                         await new Promise(resolve => setTimeout(resolve, 1000 * (2 ** i)));
                     } else {
-                        throw error; // Re-throw the final error
+                        throw error;
                     }
                 }
             }
@@ -141,16 +133,10 @@
         
         /**
          * Formats a raw date value into the UK standard (DD/MM/YYYY).
-         * @param {string|number|null} rawDateValue - The date value from the G-Viz API.
-         * @returns {string} The formatted date string or 'N/A'.
          */
         function formatUkDate(rawDateValue) {
             if (!rawDateValue) return 'N/A';
-            
-            // The G-Viz API often returns date strings in a format like 'Date(YYYY, M, D, H, M, S)'
             const date = parseRawDate(rawDateValue);
-
-            // If the date is valid, format it using en-GB locale
             if (date && !isNaN(date.getTime())) {
                 return new Intl.DateTimeFormat('en-GB', {
                     year: 'numeric',
@@ -163,21 +149,15 @@
 
         /**
          * Parses the raw response from the Google Visualization API.
-         * The response is wrapped in a JSONP-like function call that needs to be stripped.
-         * @param {string} responseText - The raw text response.
-         * @returns {object|null} The parsed JSON object, or null if parsing fails.
          */
         function parseGvizResponse(responseText) {
             try {
-                // Find the JSON object part by stripping the gviz wrapper
                 const start = responseText.indexOf('{');
                 const end = responseText.lastIndexOf('}');
-                
                 if (start === -1 || end === -1 || end < start) {
                     console.error("Could not find JSON payload in G-Viz response.");
                     return null;
                 }
-
                 const jsonString = responseText.substring(start, end + 1);
                 return JSON.parse(jsonString);
 
@@ -189,29 +169,23 @@
         
         /**
          * Reliably parses raw G-Viz date values into a standardized Date object.
-         * @param {string|number|null} rawDateValue - The date value from the G-Viz API.
-         * @returns {Date|null} A Date object standardized to midnight, or null if invalid.
          */
         function parseRawDate(rawDateValue) {
             if (!rawDateValue) return null;
             let date = null;
 
             if (typeof rawDateValue === 'string' && rawDateValue.startsWith('Date(')) {
-                // Handle the special Google Visualization API date format: Date(YYYY, M, D, ...)
-                // NOTE: The month (M) is 0-indexed in this format (Jan=0, Sep=8)!
+                // Handle G-Viz date format: Date(YYYY, M, D, ...) where M is 0-indexed
                 const match = rawDateValue.match(/Date\((\d+),(\d+),(\d+)/);
                 if (match) {
-                    // New Date(Year, Month, Day) - using the 0-indexed month from the match
                     date = new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
                 }
             } else {
-                // Handle ISO strings, timestamps, or simple date strings (e.g., cell.f)
                 date = new Date(rawDateValue);
             }
 
             if (date && !isNaN(date.getTime())) {
-                // Standardize time to midnight for comparison (only interested in the date)
-                date.setHours(0, 0, 0, 0);
+                date.setHours(0, 0, 0, 0); // Standardize time to midnight
                 return date;
             }
             return null;
@@ -219,8 +193,6 @@
 
         /**
          * Renders a single job card.
-         * @param {object} job - The job object with title, location, description, link, closingDate, and startDate.
-         * @returns {string} The HTML string for the job card.
          */
         function renderJobCard(job) {
             return `
@@ -267,9 +239,7 @@
             emptyMessage.classList.add('hidden');
 
             try {
-                // Use the resilient fetch function
                 const response = await retryFetch(GVIZ_URL, 3);
-                
                 const rawText = await response.text();
                 const data = parseGvizResponse(rawText);
 
@@ -277,21 +247,16 @@
                     throw new Error("Invalid or empty data format received from Google Sheet.");
                 }
 
+                const totalRows = data.table.rows.length;
+                console.log(`Received total rows (including header): ${totalRows}`);
+
+
                 // Get all rows, excluding the header (index 0)
                 const jobRows = data.table.rows.slice(1);
+                console.log(`Job rows remaining after slicing off header: ${jobRows.length}`);
                 
-                // --- DEBUGGING STEP ---
-                console.log(`Successfully received ${jobRows.length} total rows from the spreadsheet (excluding header).`);
-                if (jobRows.length > 0) {
-                    console.log("--- RAW DATA SAMPLE (First Row) ---");
-                    // Log the raw cell data of the first row for column inspection
-                    console.log(jobRows[0].c);
-                    console.log("-----------------------------------");
-                }
-                // -----------------------
-
                 const jobs = [];
-                // Standardize today's date to midnight for accurate comparison
+                // Get today's date standardized to midnight for accurate comparison
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
 
@@ -299,63 +264,48 @@
                     const c = row.c; // 'c' is the array of cells/columns for the row
                     
                     // --- COLUMN MAPPING ---
-                    // Note: index + 2 is the actual row number in the spreadsheet (1 for header + 1 for current index)
-                    const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A: schoolname -> c[0]
-                    const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B: jobtitle -> c[1]
-                    const description = c[6] && c[6].v ? c[6].v : '';             // Column G: jobdescription -> c[6]
-                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H: jobapplicationlink -> c[7]
+                    const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A
+                    const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B
                     
-                    // Date Fields
                     const rawStartDateValue = c[4] && (c[4].f || c[4].v);
-                    const startDate = formatUkDate(rawStartDateValue);             // Column E: startdate -> c[4]
+                    const startDate = formatUkDate(rawStartDateValue);             // Column E
                     const rawClosingDateValue = c[5] && (c[5].f || c[5].v);
-                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F: closingdate -> c[5]
+                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F
 
-                    // --- VALIDATION AND EXPIRY FILTERING LOGIC ---
+                    const description = c[6] && c[6].v ? c[6].v : '';             // Column G
+                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H
+
+                    // --- VALIDATION AND EXPIRY FILTERING LOGIC (RE-ENABLED) ---
                     
-                    // 1. Check for mandatory fields
                     const hasValidTitle = title !== 'Untitled Job';
                     const hasValidLink = link !== '#';
                     
-                    // 2. Check Expiry
-                    // TEMPORARILY SET TO TRUE FOR DEBUGGING. If jobs now show, this was the issue.
-                    let isClosingDateValid = true; 
-                    
-                    /* Original Expiry Logic (Commented out for debug):
+                    let isClosingDateValid = false; 
                     const closingDateObjectForComparison = parseRawDate(rawClosingDateValue);
+                    
                     if (closingDateObjectForComparison) {
                         // Job is valid if its closing date is today (>= today) or in the future
                         if (closingDateObjectForComparison.getTime() >= today.getTime()) {
                             isClosingDateValid = true;
                         }
                     }
-                    */
 
-                    // --- DIAGNOSTIC LOGGING ---
-                    if (!hasValidTitle || !hasValidLink || !isClosingDateValid) {
-                        console.warn(
-                            `Job filtered out (Row ${index + 2}): ` +
-                            `Title: ${title} (Valid: ${hasValidTitle}), ` +
-                            `Link: ${link} (Valid: ${hasValidLink}), ` +
-                            `Expiry check skipped for debugging.`
-                        );
-                    } else {
-                        console.log(`Job included (Row ${index + 2}): ${title}`);
-                    }
+                    // FOCUSED DIAGNOSTIC LOG
+                    console.log(`Job: ${title} | Closing Date: ${closingDate} | Valid: ${isClosingDateValid}`);
 
-
-                    // 3. Final inclusion check: Only check Title and Link for now
+                    // Final inclusion check
                     if (hasValidTitle && hasValidLink && isClosingDateValid) {
                         jobs.push({ title, location, description, link, closingDate, startDate });
                     }
                 });
+                
+                console.log(`Final jobs array length after filtering: ${jobs.length}`); 
 
                 loadingSpinner.classList.add('hidden');
 
                 if (jobs.length === 0) {
                     emptyMessage.classList.remove('hidden');
                 } else {
-                    // Inject all job cards into the list
                     jobsList.innerHTML = jobs.map(renderJobCard).join('');
                 }
 
@@ -364,7 +314,7 @@
                 loadingSpinner.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
                 
-                let troubleshootingMessage = `Failed to connect to the Google Sheet. The most likely cause is that the sheet's sharing settings are too restrictive. Please ensure your Google Sheet has sharing permissions set to "Anyone with the link can view." Details: ${error.message}`;
+                let troubleshootingMessage = `Failed to fetch data from the Google Sheet. Please check the sheet's sharing permissions ("Anyone with the link can view") and ensure data starts in the first row. Details: ${error.message}`;
 
                 errorText.textContent = troubleshootingMessage;
             }

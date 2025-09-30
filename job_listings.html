@@ -29,14 +29,16 @@
             font-family: 'Inter', sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f7f9fb; /* Light background for contrast */
+            /* CHANGE: Set background to transparent */
+            background-color: transparent; 
             min-height: 100vh;
         }
         /* Style for the main container to ensure it looks good when embedded */
         #job-listings-container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 1rem;
+            /* Removed padding-top so the list starts higher up */
+            padding: 1rem; 
         }
         /* Custom spinner style - using the new accent color */
         .loader {
@@ -56,8 +58,7 @@
 <body class="text-gray-800">
 
     <div id="job-listings-container">
-        <!-- Updated Heading Color to primary-dark -->
-        <h1 class="text-3xl md:text-4xl font-extrabold text-primary-dark mb-6 text-center">Job Vacancies</h1>
+        <!-- REMOVED: The <h1> heading for "Job Vacancies" -->
         
         <!-- Loading State -->
         <div id="loading" class="flex flex-col items-center justify-center p-10">

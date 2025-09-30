@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Openings</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Set up custom configuration for the "Inter" font and new colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    // Define the new custom color palette
+                    colors: {
+                        'primary-dark': '#2A3C52',
+                        'primary-accent': '#52BCC2',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Ensure the body takes up the full space for iframe embedding */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f9fb; /* Light background for contrast */
+            min-height: 100vh;
+        }
+        /* Style for the main container to ensure it looks good when embedded */
+        #job-listings-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        /* Custom spinner style - using the new accent color */
+        .loader {
+            border-top-color: #52BCC2; 
+            border-left-color: #52BCC2;
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="job-listings-container">
+        <!-- Updated Heading Color to primary-dark -->
+        <h1 class="text-3xl md:text-4xl font-extrabold text-primary-dark mb-6 text-center">Current Openings</h1>
+        
+        <!-- Loading State -->
+        <div id="loading" class="flex flex-col items-center justify-center p-10">
+            <div class="loader ease-linear rounded-full border-4 h-12 w-12 mb-4"></div>
+            <p class="text-lg text-gray-600">Loading job data from the spreadsheet...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong class="font-bold">Error:</strong>
+            <span class="block sm:inline" id="error-text">Could not load job data. Please check the spreadsheet URL or column configuration.</span>
+        </div>
+
+        <!-- Job Cards will be injected here -->
+        <div id="jobs-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Dynamic content goes here -->
+        </div>
+
+        <!-- Empty State - Updated Icon Color to primary-accent -->
+        <div id="empty-message" class="hidden text-center p-10 bg-white rounded-xl shadow-lg mt-6">
+            <svg class="mx-auto h-12 w-12 text-primary-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No Jobs Found</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                It looks like there are no current openings available.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Constants for the job board logic
+        const SHEET_DOC_ID = '2PACX-1vRRundEJWgO1-InVfqtSxiqjPv85a5FjKeD-pRrj0y7IyCL0oteqdmLMa_Otkda16R4PZx8QUC_VXKz';
+        const SHEET_GID = '0'; // The 'gid' parameter
+        
+        // Google Visualization API URL to fetch the spreadsheet data as JSON
+        const GVIZ_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_DOC_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+
+        // DOM Elements
+        const jobsList = document.getElementById('jobs-list');
+        const loadingSpinner = document.getElementById('loading');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const emptyMessage = document.getElementById('empty-message');
+
+        /**
+         * Parses the raw response from the Google Visualization API.
+         * The response is wrapped in a JSONP-like function call that needs to be stripped.
+         * @param {string} responseText - The raw text response.
+         * @returns {object|null} The parsed JSON object, or null if parsing fails.
+         */
+        function parseGvizResponse(responseText) {
+            try {
+                // Find the JSON object part by stripping the gviz wrapper (e.g., '/*O_o*/\nggoogle.visualization.Query.setResponse(' and ending '});')
+                const start = responseText.indexOf('{');
+                const end = responseText.lastIndexOf('}');
+                
+                if (start === -1 || end === -1 || end < start) {
+                    console.error("Could not find JSON payload in G-Viz response.");
+                    return null;
+                }
+
+                const jsonString = responseText.substring(start, end + 1);
+                return JSON.parse(jsonString);
+
+            } catch (e) {
+                console.error("Error parsing G-Viz response:", e);
+                return null;
+            }
+        }
+
+        /**
+         * Renders a single job card.
+         * @param {object} job - The job object with title, location, description, and link.
+         * @returns {string} The HTML string for the job card.
+         */
+        function renderJobCard(job) {
+            return `
+                <div class="bg-white p-6 shadow-xl hover:shadow-2xl transition duration-300 ease-in-out transform hover:-translate-y-1 rounded-xl flex flex-col">
+                    <!-- Updated Job Title Color to primary-dark -->
+                    <h2 class="text-xl font-bold text-primary-dark mb-2">${job.title}</h2>
+                    <p class="text-sm font-semibold text-gray-500 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        ${job.location}
+                    </p>
+                    <p class="text-gray-600 mb-4 flex-grow">${job.description || 'No description provided.'}</p>
+                    <!-- Updated Button Colors to primary-accent and primary-dark -->
+                    <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="mt-auto inline-block text-center bg-primary-accent hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
+                        Apply Now
+                    </a>
+                </div>
+            `;
+        }
+
+        /**
+         * Main function to fetch and display the jobs.
+         */
+        async function fetchJobs() {
+            loadingSpinner.classList.remove('hidden');
+            jobsList.innerHTML = '';
+            errorMessage.classList.add('hidden');
+            emptyMessage.classList.add('hidden');
+
+            try {
+                const response = await fetch(GVIZ_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const rawText = await response.text();
+                const data = parseGvizResponse(rawText);
+
+                if (!data || !data.table || !data.table.rows) {
+                    throw new Error("Invalid or empty data format received from Google Sheet.");
+                }
+
+                const jobs = [];
+                // The first row often contains headers, so we skip it (row[0])
+                // We start iterating from the second row (index 1) if the sheet has headers.
+                // Assuming data.table.rows[0] is the header row.
+                const jobRows = data.table.rows.slice(1);
+
+                jobRows.forEach(row => {
+                    const c = row.c; // 'c' is the array of cells/columns for the row
+                    
+                    // We check if the cell exists and has a value 'v' (value)
+                    const title = c[0] && c[0].v ? c[0].v : 'Untitled Job'; // Column A
+                    const location = c[1] && c[1].v ? c[1].v : 'Remote/TBD'; // Column B
+                    const description = c[2] && c[2].v ? c[2].v : ''; // Column C
+                    const link = c[3] && c[3].v ? c[3].v : '#'; // Column D
+
+                    // Only include jobs that have at least a title and a valid apply link (not just '#')
+                    if (title !== 'Untitled Job' && link !== '#') {
+                        jobs.push({ title, location, description, link });
+                    }
+                });
+
+                loadingSpinner.classList.add('hidden');
+
+                if (jobs.length === 0) {
+                    emptyMessage.classList.remove('hidden');
+                } else {
+                    // Inject all job cards into the list
+                    jobsList.innerHTML = jobs.map(renderJobCard).join('');
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch jobs:", error);
+                loadingSpinner.classList.add('hidden');
+                errorMessage.classList.remove('hidden');
+                errorText.textContent = `Could not load job data. Details: ${error.message}`;
+            }
+        }
+
+        // Run the main function when the page loads
+        document.addEventListener('DOMContentLoaded', fetchJobs);
+    </script>
+</body>
+</html>

@@ -4,15 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Vacancies</title>
+    <!-- NEW: Load Raleway font from Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;800&display=swap" rel="stylesheet">
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Set up custom configuration for the "Inter" font and new colors -->
+    <!-- Set up custom configuration for the "Raleway" font and new colors -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        // Updated to Raleway
+                        sans: ['Raleway', 'sans-serif'],
                     },
                     // Define the new custom color palette
                     colors: {
@@ -26,10 +29,11 @@
     <style>
         /* Ensure the body takes up the full space for iframe embedding */
         body {
-            font-family: 'Inter', sans-serif;
+            /* Updated font to Raleway */
+            font-family: 'Raleway', sans-serif;
             margin: 0;
             padding: 0;
-            /* CHANGE: Set background to transparent */
+            /* Set background to transparent */
             background-color: transparent; 
             min-height: 100vh;
         }
@@ -37,7 +41,6 @@
         #job-listings-container {
             max-width: 1200px;
             margin: 0 auto;
-            /* Removed padding-top so the list starts higher up */
             padding: 1rem; 
         }
         /* Custom spinner style - using the new accent color */
@@ -58,7 +61,16 @@
 <body class="text-gray-800">
 
     <div id="job-listings-container">
-        <!-- REMOVED: The <h1> heading for "Job Vacancies" -->
+        
+        <!-- NEW: Added back the main title -->
+        <h1 class="text-3xl font-extrabold text-primary-dark mb-6">Current Vacancies</h1>
+        
+        <!-- NEW: Search/Filter Bar -->
+        <div class="mb-8 p-4 bg-white rounded-xl shadow-lg">
+            <input type="text" id="job-search-input" 
+                   placeholder="Search by Job Title or School/Location..."
+                   class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-primary-accent focus:ring-1 focus:ring-primary-accent transition duration-150">
+        </div>
         
         <!-- Loading State -->
         <div id="loading" class="flex flex-col items-center justify-center p-10">
@@ -107,6 +119,9 @@
         const errorText = document.getElementById('error-text');
         const emptyMessage = document.getElementById('empty-message');
         
+        // NEW: Array to hold all valid jobs for filtering purposes
+        let allJobs = [];
+
         /**
          * Retries the fetch request with exponential backoff.
          */
@@ -280,6 +295,42 @@
         }
 
         /**
+         * Renders the provided array of jobs to the jobs-list container.
+         * @param {Array<Object>} jobsToRender - The array of job objects to display.
+         */
+        function renderJobs(jobsToRender) {
+            if (jobsToRender.length === 0) {
+                emptyMessage.classList.remove('hidden');
+                jobsList.innerHTML = '';
+            } else {
+                emptyMessage.classList.add('hidden');
+                jobsList.innerHTML = jobsToRender.map(renderJobCard).join('');
+            }
+        }
+        
+        /**
+         * Filters the job listings based on the text in the search input.
+         */
+        function handleSearch() {
+            const searchTerm = document.getElementById('job-search-input').value.toLowerCase().trim();
+            
+            // If the search term is empty, show all jobs.
+            if (!searchTerm) {
+                renderJobs(allJobs); 
+                return;
+            }
+
+            // Filter the jobs array: search against job title AND location (school).
+            const filtered = allJobs.filter(job => 
+                job.title.toLowerCase().includes(searchTerm) || 
+                job.location.toLowerCase().includes(searchTerm)
+            );
+
+            renderJobs(filtered);
+        }
+
+
+        /**
          * Main function to fetch and display the jobs.
          */
         async function fetchJobs() {
@@ -308,7 +359,7 @@
                 const jobRows = data.table.rows; 
                 console.log(`Job rows to process: ${jobRows.length}`);
                 
-                const jobs = [];
+                const currentJobs = [];
                 // Get today's date standardized to midnight for accurate comparison
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -370,19 +421,17 @@
 
                     // Final inclusion check
                     if (hasValidTitle && hasValidLink && isClosingDateValid) {
-                        jobs.push({ title, location, description, link, closingDate, startDate, salary, contractHours, applicationPackLink });
+                        currentJobs.push({ title, location, description, link, closingDate, startDate, salary, contractHours, applicationPackLink });
                     }
                 });
                 
-                console.log(`Final jobs array length after filtering: ${jobs.length}`); 
+                console.log(`Final jobs array length after filtering: ${currentJobs.length}`); 
 
                 loadingSpinner.classList.add('hidden');
-
-                if (jobs.length === 0) {
-                    emptyMessage.classList.remove('hidden');
-                } else {
-                    jobsList.innerHTML = jobs.map(renderJobCard).join('');
-                }
+                
+                // Store all valid jobs globally and render them initially
+                allJobs = currentJobs;
+                renderJobs(allJobs); 
 
             } catch (error) {
                 console.error('Failed to fetch jobs:', error);
@@ -396,7 +445,17 @@
         }
 
         // Run the main function when the page loads
-        document.addEventListener('DOMContentLoaded', fetchJobs);
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchJobs();
+            
+            // NEW: Attach filter listener to the search input
+            const searchInput = document.getElementById('job-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('keyup', handleSearch);
+                searchInput.addEventListener('change', handleSearch);
+            }
+        });
     </script>
 </body>
 </html>
+

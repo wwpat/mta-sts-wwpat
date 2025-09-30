@@ -93,8 +93,8 @@
         const SHEET_DOC_ID = '13OnaZQwyzu7lTTCgI02XVr4Uo_0c_GdQ1o8h4Q4GVrc';
         const SHEET_GID = '0'; // The 'gid' parameter (0 is usually the first tab)
         
-        // CRITICAL UPDATE: Using explicit G-Viz query to select ALL data columns (A-H) for reliability.
-        const GVIZ_QUERY = 'select%20A%2C%20B%2C%20C%2C%20D%2C%20E%2C%20F%2C%20G%2C%20H'; // URL-encoded: select A, B, C, D, E, F, G, H
+        // IMPORTANT: Updated G-Viz query to select columns A through I (A-H + I for Application Pack Link)
+        const GVIZ_QUERY = 'select%20A%2C%20B%2C%20C%2C%20D%2C%20E%2C%20F%2C%20G%2C%20H%2C%20I'; 
         
         // FIX: Added 'headers=1' to the tqx parameter to explicitly tell the API how many header rows there are, which helps data range detection.
         const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_DOC_ID}/gviz/tq?tqx=out:json;headers=1&gid=${SHEET_GID}&tq=${GVIZ_QUERY}`;
@@ -204,6 +204,17 @@
          * Renders a single job card.
          */
         function renderJobCard(job) {
+            // Conditional HTML for the Application Pack button (Column I)
+            const applicationPackButton = job.applicationPackLink ? `
+                <a href="${job.applicationPackLink}" target="_blank" rel="noopener noreferrer" 
+                   class="flex-1 inline-block text-center border-2 border-primary-accent text-primary-dark font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out hover:bg-primary-accent hover:text-white focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
+                    View Pack
+                </a>
+            ` : '';
+
+            // Determine button layout class: if the pack link is present, use flex gap, otherwise it will default to full width.
+            const buttonContainerClasses = job.applicationPackLink ? "flex gap-4" : "";
+
             return `
                 <div class="bg-white p-6 shadow-xl hover:shadow-2xl transition duration-300 ease-in-out transform hover:-translate-y-1 rounded-xl flex flex-col">
                     <!-- Job Title -->
@@ -214,6 +225,20 @@
                         <svg class="w-4 h-4 mr-1 text-primary-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                         ${job.location}
                     </p>
+
+                    <!-- Contract Details (Salary and Hours) -->
+                    <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold text-gray-600 mb-4">
+                        <span class="flex items-center">
+                            <!-- Dollar/Currency Icon -->
+                            <svg class="w-4 h-4 mr-1 text-primary-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM4 16h16M4 12h16"></path></svg>
+                            Salary: ${job.salary}
+                        </span>
+                        <span class="flex items-center">
+                            <!-- Clock Icon -->
+                            <svg class="w-4 h-4 mr-1 text-primary-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
+                            Hours: ${job.contractHours}
+                        </span>
+                    </div>
 
                     <!-- Start and Closing Dates -->
                     <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-gray-400 mb-4">
@@ -235,17 +260,20 @@
                                 <!-- Icon to indicate open/close state -->
                                 <svg class="w-4 h-4 transform group-open:rotate-180 transition-transform duration-200 text-primary-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </summary>
-                            <!-- Added 'whitespace-pre-wrap' class to preserve line breaks from the spreadsheet -->
+                            <!-- 'whitespace-pre-wrap' class preserves line breaks from the spreadsheet -->
                             <div class="mt-2 text-gray-600 text-sm whitespace-pre-wrap">
                                 ${job.description || 'No description provided.'}
                             </div>
                         </details>
                     </div>
 
-                    <!-- Apply Button -->
-                    <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="mt-auto inline-block text-center bg-primary-accent hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
-                        Apply Now
-                    </a>
+                    <!-- Apply Button Container (Updated to handle two buttons) -->
+                    <div class="mt-auto ${buttonContainerClasses} pt-4 border-t border-gray-100">
+                        ${applicationPackButton}
+                        <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="flex-1 inline-block text-center bg-primary-accent hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
+                            Apply Now
+                        </a>
+                    </div>
                 </div>
             `;
         }
@@ -268,7 +296,6 @@
                     throw new Error("Invalid or empty data format received from Google Sheet.");
                 }
 
-                // --- FINAL RAW DATA OBJECT RECEIVED ---
                 console.log('--- FINAL RAW DATA OBJECT RECEIVED ---');
                 console.log(data);
                 
@@ -291,14 +318,33 @@
                     // --- COLUMN MAPPING ---
                     const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A
                     const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B
+                    const salary = c[2] && c[2].v ? c[2].v : 'Not specified';      // Column C
+                    const contractHours = c[3] && c[3].v ? c[3].v : 'Not specified'; // Column D
                     
+                    // --- Start Date (Column E) - Handle Dates and Custom Text ---
                     const rawStartDateValue = c[4] && (c[4].f || c[4].v);
-                    const startDate = formatUkDate(rawStartDateValue);             // Column E
+                    let startDateToDisplay = 'Not specified';
+
+                    if (rawStartDateValue) {
+                        if (typeof rawStartDateValue === 'string' && !rawStartDateValue.startsWith('Date(')) {
+                            // If it's a string that doesn't look like the G-Viz date object, treat as literal text (e.g., "ASAP")
+                            startDateToDisplay = rawStartDateValue;
+                        } else {
+                            // If it's a date string (Date(...)) or another type, try to format it as a date
+                            startDateToDisplay = formatUkDate(rawStartDateValue);
+                        }
+                    }
+                    const startDate = startDateToDisplay; 
+                    
+                    // --- Closing Date (Column F) - Must be a parsable date for expiry filter ---
                     const rawClosingDateValue = c[5] && (c[5].f || c[5].v);
-                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F
+                    const closingDate = formatUkDate(rawClosingDateValue);         
 
                     const description = c[6] && c[6].v ? c[6].v : '';             // Column G
-                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H
+                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H (Apply Link)
+
+                    // NEW: Application Pack Link (Column I)
+                    const applicationPackLink = c[8] && c[8].v ? c[8].v : '';     // Column I
 
                     // --- VALIDATION AND EXPIRY FILTERING LOGIC ---
                     
@@ -306,9 +352,9 @@
                     const hasValidLink = link !== '#';
                     
                     let isClosingDateValid = false; 
+                    // This object must be parsed from the raw value for accurate date comparison
                     const closingDateObjectForComparison = parseRawDate(rawClosingDateValue);
 
-                    // --- NEW DIAGNOSTIC LOG: Log the comparison dates as milliseconds ---
                     console.log(`Today MS: ${today.getTime()} (${today.toDateString()}) | Closing MS: ${closingDateObjectForComparison ? closingDateObjectForComparison.getTime() : 'N/A'}`);
                     
                     if (closingDateObjectForComparison) {
@@ -323,7 +369,7 @@
 
                     // Final inclusion check
                     if (hasValidTitle && hasValidLink && isClosingDateValid) {
-                        jobs.push({ title, location, description, link, closingDate, startDate });
+                        jobs.push({ title, location, description, link, closingDate, startDate, salary, contractHours, applicationPackLink });
                     }
                 });
                 

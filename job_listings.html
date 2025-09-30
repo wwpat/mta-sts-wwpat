@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Vacancies</title>
-    <!-- NEW: Load Raleway font from Google Fonts -->
+    <!-- Load Raleway font from Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;800&display=swap" rel="stylesheet">
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -62,10 +62,10 @@
 
     <div id="job-listings-container">
         
-        <!-- NEW: Added back the main title -->
+        <!-- Main Title -->
         <h1 class="text-3xl font-extrabold text-primary-dark mb-6">Current Vacancies</h1>
         
-        <!-- NEW: Search/Filter Bar -->
+        <!-- Search/Filter Bar -->
         <div class="mb-8 p-4 bg-white rounded-xl shadow-lg">
             <input type="text" id="job-search-input" 
                    placeholder="Search by Job Title or School/Location..."
@@ -84,12 +84,12 @@
             <span class="block sm:inline" id="error-text">Could not load job data. Please check the spreadsheet URL or column configuration.</span>
         </div>
 
-        <!-- Job Cards will be injected here. Changed lg:grid-cols-3 to lg:grid-cols-2 for wider cards. -->
+        <!-- Job Cards will be injected here. -->
         <div id="jobs-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             <!-- Dynamic content goes here -->
         </div>
 
-        <!-- Empty State - Updated Icon Color to primary-accent -->
+        <!-- Empty State -->
         <div id="empty-message" class="hidden text-center p-10 bg-white rounded-xl shadow-lg mt-6">
             <svg class="mx-auto h-12 w-12 text-primary-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -99,6 +99,17 @@
                 It looks like there are no current openings available.
             </p>
         </div>
+        
+        <!-- UPDATED: Trust Board Vacancies Card -->
+        <div class="mt-10 p-6 bg-white shadow-xl hover:shadow-2xl transition duration-300 ease-in-out transform hover:-translate-y-1 rounded-xl text-center">
+            <h3 class="text-2xl font-extrabold text-primary-dark mb-4">Governance Opportunities</h3>
+            <p class="text-gray-600 mb-6">Explore governance roles and make a strategic impact on our Trust.</p>
+            <a href="https://whitewoodsprimaryacademytrust.schooljotter3.com/trust-board-director-opportunities" target="_blank" rel="noopener noreferrer"
+               class="inline-block bg-primary-accent hover:bg-primary-dark text-white text-lg font-bold py-3 px-8 rounded-lg transition duration-150 ease-in-out shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-primary-accent focus:ring-opacity-50">
+                More Information
+            </a>
+        </div>
+        
     </div>
 
     <script>
@@ -119,7 +130,7 @@
         const errorText = document.getElementById('error-text');
         const emptyMessage = document.getElementById('empty-message');
         
-        // NEW: Array to hold all valid jobs for filtering purposes
+        // Array to hold all valid jobs for filtering purposes
         let allJobs = [];
 
         /**
@@ -448,7 +459,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             fetchJobs();
             
-            // NEW: Attach filter listener to the search input
+            // Attach filter listener to the search input
             const searchInput = document.getElementById('job-search-input');
             if (searchInput) {
                 searchInput.addEventListener('keyup', handleSearch);
@@ -458,4 +469,3 @@
     </script>
 </body>
 </html>
-

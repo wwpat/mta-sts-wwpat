@@ -277,29 +277,39 @@
                     throw new Error("Invalid or empty data format received from Google Sheet.");
                 }
 
+                // Get all rows, excluding the header (index 0)
+                const jobRows = data.table.rows.slice(1);
+                
+                // --- DEBUGGING STEP ---
+                console.log(`Successfully received ${jobRows.length} total rows from the spreadsheet (excluding header).`);
+                if (jobRows.length > 0) {
+                    console.log("--- RAW DATA SAMPLE (First Row) ---");
+                    // Log the raw cell data of the first row for column inspection
+                    console.log(jobRows[0].c);
+                    console.log("-----------------------------------");
+                }
+                // -----------------------
+
                 const jobs = [];
                 // Standardize today's date to midnight for accurate comparison
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-
-                // Skip the first row (index 0), assuming it contains headers
-                const jobRows = data.table.rows.slice(1);
 
                 jobRows.forEach((row, index) => {
                     const c = row.c; // 'c' is the array of cells/columns for the row
                     
                     // --- COLUMN MAPPING ---
                     // Note: index + 2 is the actual row number in the spreadsheet (1 for header + 1 for current index)
-                    const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A: schoolname
-                    const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B: jobtitle
-                    const description = c[6] && c[6].v ? c[6].v : '';             // Column G: jobdescription
-                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H: jobapplicationlink
+                    const location = c[0] && c[0].v ? c[0].v : 'Location TBD';    // Column A: schoolname -> c[0]
+                    const title = c[1] && c[1].v ? c[1].v : 'Untitled Job';        // Column B: jobtitle -> c[1]
+                    const description = c[6] && c[6].v ? c[6].v : '';             // Column G: jobdescription -> c[6]
+                    const link = c[7] && c[7].v ? c[7].v : '#';                   // Column H: jobapplicationlink -> c[7]
                     
                     // Date Fields
                     const rawStartDateValue = c[4] && (c[4].f || c[4].v);
-                    const startDate = formatUkDate(rawStartDateValue);             // Column E: startdate
+                    const startDate = formatUkDate(rawStartDateValue);             // Column E: startdate -> c[4]
                     const rawClosingDateValue = c[5] && (c[5].f || c[5].v);
-                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F: closingdate
+                    const closingDate = formatUkDate(rawClosingDateValue);         // Column F: closingdate -> c[5]
 
                     // --- VALIDATION AND EXPIRY FILTERING LOGIC ---
                     
@@ -308,15 +318,18 @@
                     const hasValidLink = link !== '#';
                     
                     // 2. Check Expiry
-                    let isClosingDateValid = false;
+                    // TEMPORARILY SET TO TRUE FOR DEBUGGING. If jobs now show, this was the issue.
+                    let isClosingDateValid = true; 
+                    
+                    /* Original Expiry Logic (Commented out for debug):
                     const closingDateObjectForComparison = parseRawDate(rawClosingDateValue);
-
                     if (closingDateObjectForComparison) {
                         // Job is valid if its closing date is today (>= today) or in the future
                         if (closingDateObjectForComparison.getTime() >= today.getTime()) {
                             isClosingDateValid = true;
                         }
                     }
+                    */
 
                     // --- DIAGNOSTIC LOGGING ---
                     if (!hasValidTitle || !hasValidLink || !isClosingDateValid) {
@@ -324,14 +337,14 @@
                             `Job filtered out (Row ${index + 2}): ` +
                             `Title: ${title} (Valid: ${hasValidTitle}), ` +
                             `Link: ${link} (Valid: ${hasValidLink}), ` +
-                            `Closing Date: ${closingDate} (Expired: ${!isClosingDateValid})`
+                            `Expiry check skipped for debugging.`
                         );
                     } else {
                         console.log(`Job included (Row ${index + 2}): ${title}`);
                     }
 
 
-                    // 3. Final inclusion check
+                    // 3. Final inclusion check: Only check Title and Link for now
                     if (hasValidTitle && hasValidLink && isClosingDateValid) {
                         jobs.push({ title, location, description, link, closingDate, startDate });
                     }
@@ -362,3 +375,4 @@
     </script>
 </body>
 </html>
+
